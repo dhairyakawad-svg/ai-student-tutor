@@ -1,7 +1,7 @@
 import streamlit as st
 from PIL import Image
 import pytesseract
-import openai
+from openai import OpenAI
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -13,17 +13,16 @@ st.set_page_config(
 st.title("📚 AI Student Tutor")
 st.write("Ask questions by typing or uploading a photo")
 
-# ---------------- API KEY SAFE HANDLING ----------------
+# ---------------- API KEY CHECK ----------------
 if "OPENAI_API_KEY" not in st.secrets:
-    st.error("❌ OpenAI API key not found.")
-    st.info("👉 Go to Streamlit Cloud → Manage App → Settings → Secrets and add your API key.")
+    st.error("❌ OpenAI API key missing")
     st.stop()
 
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # ---------------- INPUT METHOD ----------------
 mode = st.radio(
-    "Choose how you want to ask:",
+    "Choose input method",
     ["✍️ Type Question", "📷 Upload Image"]
 )
 
@@ -31,60 +30,57 @@ question_text = ""
 
 if mode == "✍️ Type Question":
     question_text = st.text_area(
-        "Type your question here",
+        "Type your question",
         placeholder="Example: Solve 2x + 5 = 15"
     )
 
-elif mode == "📷 Upload Image":
+else:
     uploaded_file = st.file_uploader(
         "Upload homework image",
         type=["png", "jpg", "jpeg"]
     )
 
-    if uploaded_file is not None:
+    if uploaded_file:
         image = Image.open(uploaded_file)
         st.image(image, caption="Uploaded Image", use_column_width=True)
 
-        with st.spinner("Reading text from image..."):
+        with st.spinner("Reading image..."):
             question_text = pytesseract.image_to_string(image)
 
-        st.text_area(
-            "Extracted Text (editable)",
+        question_text = st.text_area(
+            "Extracted text (you can edit it)",
             value=question_text,
             height=150
         )
 
 # ---------------- STUDENT LEVEL ----------------
-level = st.selectbox(
-    "Select student level",
-    ["School", "University"]
-)
+level = st.selectbox("Student level", ["School", "University"])
 
-# ---------------- GET ANSWER ----------------
+# ---------------- ANSWER BUTTON ----------------
 if st.button("✅ Get Answer"):
     if not question_text.strip():
-        st.warning("⚠️ Please enter a question or upload an image.")
+        st.warning("⚠️ Please enter a question")
     else:
         with st.spinner("AI is thinking..."):
             try:
                 prompt = f"""
 You are an AI tutor.
+
 Student level: {level}
 
-Instructions:
+Rules:
 - Use very simple language
-- Be clear and direct
-- If math/science, explain step by step
-- Keep it student-friendly
+- Be clear and short
+- Explain step by step if needed
 
 Question:
 {question_text}
 """
 
-                response = openai.ChatCompletion.create(
-                    model="gpt-3.5-turbo",
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
                     messages=[
-                        {"role": "system", "content": "You are a helpful AI tutor for students."},
+                        {"role": "system", "content": "You help students understand homework."},
                         {"role": "user", "content": prompt}
                     ]
                 )
@@ -95,9 +91,8 @@ Question:
                 st.write(answer)
 
             except Exception as e:
-                st.error("❌ Something went wrong while generating the answer.")
-                st.exception(e)
+                st.error("❌ AI error")
+                st.code(str(e))
 
-# ---------------- FOOTER ----------------
 st.markdown("---")
-st.caption("Built with ❤️ using Streamlit & OpenAI")
+st.caption("AI Student Tutor • Streamlit")
